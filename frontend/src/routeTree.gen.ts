@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as InsightsRouteImport } from './routes/insights'
 import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as RentalsRouteImport } from './routes/rentals'
 import { Route as ListingsListingIdRouteImport } from './routes/listings/$listingId'
@@ -17,6 +18,11 @@ import { Route as ListingsListingIdRouteImport } from './routes/listings/$listin
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InsightsRoute = InsightsRouteImport.update({
+  id: '/insights',
+  path: '/insights',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectsRoute = ProjectsRouteImport.update({
@@ -37,12 +43,14 @@ const ListingsListingIdRoute = ListingsListingIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/insights': typeof InsightsRoute
   '/projects': typeof ProjectsRoute
   '/rentals': typeof RentalsRoute
   '/listings/$listingId': typeof ListingsListingIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/insights': typeof InsightsRoute
   '/projects': typeof ProjectsRoute
   '/rentals': typeof RentalsRoute
   '/listings/$listingId': typeof ListingsListingIdRoute
@@ -50,20 +58,29 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/insights': typeof InsightsRoute
   '/projects': typeof ProjectsRoute
   '/rentals': typeof RentalsRoute
   '/listings/$listingId': typeof ListingsListingIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/projects' | '/rentals' | '/listings/$listingId'
+  fullPaths:
+    '/' | '/insights' | '/projects' | '/rentals' | '/listings/$listingId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/projects' | '/rentals' | '/listings/$listingId'
-  id: '__root__' | '/' | '/projects' | '/rentals' | '/listings/$listingId'
+  to: '/' | '/insights' | '/projects' | '/rentals' | '/listings/$listingId'
+  id:
+    | '__root__'
+    | '/'
+    | '/insights'
+    | '/projects'
+    | '/rentals'
+    | '/listings/$listingId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  InsightsRoute: typeof InsightsRoute
   ProjectsRoute: typeof ProjectsRoute
   RentalsRoute: typeof RentalsRoute
   ListingsListingIdRoute: typeof ListingsListingIdRoute
@@ -76,6 +93,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/insights': {
+      id: '/insights'
+      path: '/insights'
+      fullPath: '/insights'
+      preLoaderRoute: typeof InsightsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects': {
@@ -104,6 +128,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  InsightsRoute: InsightsRoute,
   ProjectsRoute: ProjectsRoute,
   RentalsRoute: RentalsRoute,
   ListingsListingIdRoute: ListingsListingIdRoute,
