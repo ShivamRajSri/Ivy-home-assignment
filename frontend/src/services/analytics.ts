@@ -98,6 +98,7 @@ function calculateAvgPricePerSqft() {
       !isCorrupt(listing) &&
       !FAKE_IDS.has(listing.listing_id) &&
       listing.price > 0 &&
+      listing.carpet_area !== undefined &&
       listing.carpet_area > 0,
   );
 
@@ -106,7 +107,8 @@ function calculateAvgPricePerSqft() {
   }
 
   const total = rows.reduce(
-    (sum, listing) => sum + listing.price / listing.carpet_area,
+    (sum, listing) =>
+      sum + listing.price / listing.carpet_area!,
     0,
   );
 

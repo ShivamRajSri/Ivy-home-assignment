@@ -3,7 +3,6 @@ import { AlertTriangle, BarChart3, Building2, Home, IndianRupee } from "lucide-r
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
 import { Header } from "@/components/ivy/Header";
-import { Button } from "@/components/ui/button";
 
 import { authService, type AuthSession } from "@/services/auth";
 import {
