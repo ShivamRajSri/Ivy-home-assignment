@@ -1,0 +1,18 @@
+@import "tailwindcss" source(none);
+@import "tw-animate-css";
+
+@source "../src";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 3px); --radius-md: calc(var(--radius) - 1px); --radius-lg: var(--radius); --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif; --font-display: "Newsreader", Georgia, serif;
+  --color-background: var(--background); --color-foreground: var(--foreground); --color-card: var(--card); --color-card-foreground: var(--card-foreground); --color-popover: var(--popover); --color-popover-foreground: var(--popover-foreground); --color-primary: var(--primary); --color-primary-foreground: var(--primary-foreground); --color-secondary: var(--secondary); --color-secondary-foreground: var(--secondary-foreground); --color-muted: var(--muted); --color-muted-foreground: var(--muted-foreground); --color-accent: var(--accent); --color-accent-foreground: var(--accent-foreground); --color-destructive: var(--destructive); --color-destructive-foreground: var(--destructive-foreground); --color-border: var(--border); --color-input: var(--input); --color-ring: var(--ring); --color-live: var(--live); --color-live-foreground: var(--live-foreground); --color-hero: var(--hero);
+  --shadow-soft: 0 10px 35px oklch(0.2 0.025 155 / .08); --shadow-card: 0 1px 2px oklch(0.2 0.025 155 / .04), 0 6px 20px oklch(0.2 0.025 155 / .04); --shadow-card-hover: 0 16px 42px oklch(0.2 0.025 155 / .12);
+}
+:root {
+  --radius: .5rem; --background: oklch(.975 .006 105); --foreground: oklch(.24 .035 155); --card: oklch(.998 .002 105); --card-foreground: oklch(.24 .035 155); --popover: oklch(.998 .002 105); --popover-foreground: oklch(.24 .035 155); --primary: oklch(.30 .055 156); --primary-foreground: oklch(.985 .006 105); --secondary: oklch(.935 .018 115); --secondary-foreground: oklch(.28 .04 155); --muted: oklch(.945 .007 105); --muted-foreground: oklch(.51 .018 145); --accent: oklch(.91 .027 116); --accent-foreground: oklch(.27 .045 155); --destructive: oklch(.56 .2 26); --destructive-foreground: oklch(.99 .004 100); --border: oklch(.88 .012 115); --input: oklch(.86 .012 115); --ring: oklch(.43 .07 155); --live: oklch(.63 .16 145); --live-foreground: oklch(.99 .004 100); --hero: oklch(.95 .018 112);
+}
+@layer base { * { border-color: var(--color-border); } html { scroll-behavior: smooth; } body { margin:0; background-color:var(--color-background); color:var(--color-foreground); font-family:var(--font-sans); } button, [role="button"], input, [role="combobox"] { outline-color:var(--color-ring); } ::selection { background:var(--color-accent); color:var(--color-accent-foreground); } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior:auto!important; transition-duration:.01ms!important; animation-duration:.01ms!important; animation-iteration-count:1!important; } }

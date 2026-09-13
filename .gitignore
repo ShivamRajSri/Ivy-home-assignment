@@ -3,5 +3,5 @@ venv/
 __pycache__/
 *.pyc
 data/
-node_modules/
-dist/
+vite-project/node_modules
+vite-project/public
