@@ -8,24 +8,26 @@ import { authService } from "./auth";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const API_KEY = import.meta.env.VITE_API_KEY;
 
-const FETCH_PAGE_SIZE = 100;
-
 export interface ListingsService {
   getListings(params: ListingParams): Promise<ListingResponse>;
-  getListingById(listingId: string): Promise<Listing | null>;
+
+  getListingById(
+    listingId: string,
+  ): Promise<Listing | null>;
 }
 
-function buildQuery(params: ListingParams) {
-  const query = new URLSearchParams();
+/*
+ * Cache all listings in memory after the first successful load.
+ * This lets us apply locality, bedroom, price, furnishing,
+ * verified and live filters reliably on the client.
+ */
+let allListingsCache: Listing[] | null = null;
 
-  query.set("offset", String(params.offset));
-  query.set("limit", String(params.limit));
+let loadingPromise: Promise<Listing[]> | null = null;
 
-  return query.toString();
-}
-
-async function requestListings(
-  params: ListingParams,
+async function fetchListingPage(
+  offset: number,
+  limit: number,
   retry = true,
 ): Promise<ListingResponse> {
   const session = await authService.restoreSession();
@@ -37,7 +39,7 @@ async function requestListings(
   }
 
   const response = await fetch(
-    `${API_BASE_URL}/v1/listings?${buildQuery(params)}`,
+    `${API_BASE_URL}/v1/listings?offset=${offset}&limit=${limit}`,
     {
       method: "GET",
       headers: {
@@ -47,6 +49,9 @@ async function requestListings(
     },
   );
 
+  /*
+   * Access token expired.
+   */
   if (response.status === 401 && retry) {
     const refreshed = await authService.refreshSession();
 
@@ -56,7 +61,7 @@ async function requestListings(
       );
     }
 
-    return requestListings(params, false);
+    return fetchListingPage(offset, limit, false);
   }
 
   if (!response.ok) {
@@ -80,50 +85,269 @@ async function requestListings(
   const data = await response.json();
 
   return {
-    results: data.results ?? [],
-    total: data.total ?? 0,
-    offset: data.offset ?? params.offset,
-    limit: data.limit ?? params.limit,
+    results: Array.isArray(data.results)
+      ? data.results
+      : [],
+    total: Number(data.total ?? 0),
+    offset: Number(data.offset ?? offset),
+    limit: Number(data.limit ?? limit),
     has_more: Boolean(data.has_more),
   };
 }
 
-async function getListingById(
-  listingId: string,
-): Promise<Listing | null> {
-  let offset = 0;
+/*
+ * Download all listing records.
+ *
+ * We intentionally don't trust the API's `total` value because
+ * the API has previously returned an inconsistent total.
+ * We continue until has_more becomes false.
+ */
+async function fetchAllListings(): Promise<Listing[]> {
+  if (allListingsCache) {
+    return allListingsCache;
+  }
 
-  while (true) {
-    const response = await requestListings({
-      offset,
-      limit: FETCH_PAGE_SIZE,
-    });
+  if (loadingPromise) {
+    return loadingPromise;
+  }
 
-    const found = response.results.find(
-      (listing) => listing.listing_id === listingId,
-    );
+  loadingPromise = (async () => {
+    const results: Listing[] = [];
 
-    if (found) {
-      return found;
+    const pageSize = 100;
+    let offset = 0;
+
+    while (true) {
+      const page = await fetchListingPage(
+        offset,
+        pageSize,
+      );
+
+      results.push(...page.results);
+
+      if (
+        !page.has_more ||
+        page.results.length === 0
+      ) {
+        break;
+      }
+
+      offset += page.results.length;
+    }
+
+    allListingsCache = results;
+
+    return results;
+  })();
+
+  try {
+    return await loadingPromise;
+  } finally {
+    loadingPromise = null;
+  }
+}
+
+/*
+ * Case-insensitive text matching.
+ */
+function sameText(
+  value: string | undefined,
+  filter: string | undefined,
+) {
+  if (!filter) {
+    return true;
+  }
+
+  return (
+    value?.trim().toLowerCase() ===
+    filter.trim().toLowerCase()
+  );
+}
+
+/*
+ * Apply all UI filters locally.
+ */
+function applyFilters(
+  listings: Listing[],
+  params: ListingParams,
+) {
+  const search = params.search
+    ?.trim()
+    .toLowerCase();
+
+  return listings.filter((item) => {
+    /*
+     * Search
+     */
+    if (search) {
+      const searchableText = [
+        item.apartment_name,
+        item.locality,
+        item.property_type,
+        item.description,
+        item.posted_by,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      if (!searchableText.includes(search)) {
+        return false;
+      }
+    }
+
+    /*
+     * Locality
+     */
+    if (!sameText(item.locality, params.locality)) {
+      return false;
+    }
+
+    /*
+     * Bedroom
+     *
+     * 4 means 4+ BHK.
+     */
+    if (params.bedroom != null) {
+      if (params.bedroom === 4) {
+        if (item.bedroom < 4) {
+          return false;
+        }
+      } else if (item.bedroom !== params.bedroom) {
+        return false;
+      }
+    }
+
+    /*
+     * Property type
+     */
+    if (
+      !sameText(
+        item.property_type,
+        params.property_type,
+      )
+    ) {
+      return false;
+    }
+
+    /*
+     * Furnishing
+     */
+    if (
+      !sameText(
+        item.furnishing,
+        params.furnishing,
+      )
+    ) {
+      return false;
+    }
+
+    /*
+     * Price
+     */
+    if (
+      params.min_price != null &&
+      item.price < params.min_price
+    ) {
+      return false;
     }
 
     if (
-      !response.has_more ||
-      response.results.length === 0
+      params.max_price != null &&
+      item.price > params.max_price
     ) {
-      return null;
+      return false;
     }
 
-    offset += response.results.length;
+    /*
+     * Verified
+     */
+    if (
+      params.is_verified === true &&
+      item.is_verified !== true
+    ) {
+      return false;
+    }
+
+    /*
+     * Live
+     */
+    if (
+      params.is_live === true &&
+      item.is_live !== true
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+/*
+ * Sorting
+ */
+function sortListings(
+  listings: Listing[],
+  sort: ListingParams["sort"],
+) {
+  const rows = [...listings];
+
+  if (sort === "price_asc") {
+    rows.sort((a, b) => a.price - b.price);
   }
+
+  if (sort === "price_desc") {
+    rows.sort((a, b) => b.price - a.price);
+  }
+
+  if (sort === "newest") {
+    rows.sort(
+      (a, b) =>
+        Date.parse(b.posted_at ?? "") -
+        Date.parse(a.posted_at ?? ""),
+    );
+  }
+
+  return rows;
 }
 
 export const listingsService: ListingsService = {
   async getListings(params) {
-    return requestListings(params);
-  },
+    const allListings = await fetchAllListings();
 
+    let filtered = applyFilters(
+      allListings,
+      params,
+    );
+
+    filtered = sortListings(
+      filtered,
+      params.sort,
+    );
+
+    const total = filtered.length;
+
+    const results = filtered.slice(
+      params.offset,
+      params.offset + params.limit,
+    );
+
+    return {
+      results,
+      total,
+      offset: params.offset,
+      limit: params.limit,
+      has_more:
+        params.offset + params.limit < total,
+    };
+  },
   async getListingById(listingId) {
-    return getListingById(listingId);
+  const allListings = await fetchAllListings();
+
+  return (
+    allListings.find(
+      (item) => item.listing_id === listingId,
+    ) ?? null
+   );
   },
 };

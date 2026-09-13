@@ -40,7 +40,7 @@ function ErrorComponent({
   error,
   reset,
 }: {
-  error: Error;
+  error: unknown;
   reset: () => void;
 }) {
   console.error(error);
@@ -48,7 +48,16 @@ function ErrorComponent({
   const router = useRouter();
 
   useEffect(() => {
-    reportLovableError(error, {
+    const errorToReport =
+      error instanceof Error
+        ? error
+        : new Error(
+            typeof error === "string"
+              ? error
+              : "Unknown application error",
+          );
+
+    reportLovableError(errorToReport, {
       boundary: "tanstack_root_error_component",
     });
   }, [error]);
@@ -76,12 +85,12 @@ function ErrorComponent({
             Try again
           </button>
 
-          <a
-            href="/"
+          <Link
+            to="/"
             className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
           >
             Go home
-          </a>
+          </Link>
         </div>
       </div>
     </div>
