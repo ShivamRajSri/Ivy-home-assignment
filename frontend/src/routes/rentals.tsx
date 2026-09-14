@@ -1,13 +1,23 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { Heart } from "lucide-react";
 
 import { Header } from "@/components/ivy/Header";
-import { authService, type AuthSession } from "@/services/auth";
+
+import {
+  authService,
+  type AuthSession,
+} from "@/services/auth";
 
 import {
   rentalsService,
   type RentalFilters,
 } from "@/services/rentals";
+
+import {
+  loadSaved,
+  toggleSaved,
+} from "@/services/saved";
 
 export const Route = createFileRoute("/rentals")({
   component: RentalsPage,
@@ -34,7 +44,14 @@ function RentalsPage() {
     useState(0);
 
   /*
-   * Restore the actual logged-in session.
+   * IDs of rentals saved by the current user.
+   */
+  const [savedRentals, setSavedRentals] =
+    useState<Set<string>>(new Set());
+
+  /*
+   * Restore the actual logged-in session
+   * and load this user's saved rentals.
    */
   useEffect(() => {
     let active = true;
@@ -42,8 +59,16 @@ function RentalsPage() {
     authService
       .restoreSession()
       .then((restored) => {
-        if (active) {
-          setSession(restored);
+        if (!active) {
+          return;
+        }
+
+        setSession(restored);
+
+        if (restored) {
+          setSavedRentals(
+            loadSaved(restored, "rental"),
+          );
         }
       })
       .finally(() => {
@@ -90,6 +115,25 @@ function RentalsPage() {
   }
 
   /*
+   * Save / remove a rental from favorites.
+   */
+  function handleFavorite(
+    listingId: string,
+  ) {
+    if (!session) {
+      return;
+    }
+
+    setSavedRentals(
+      toggleSaved(
+        session,
+        "rental",
+        listingId,
+      ),
+    );
+  }
+
+  /*
    * Session loading.
    */
   if (loadingSession) {
@@ -116,6 +160,7 @@ function RentalsPage() {
         name={session.displayName}
         onLogout={async () => {
           await authService.signOut();
+
           window.location.href = "/";
         }}
       />
@@ -288,87 +333,122 @@ function RentalsPage() {
         ) : (
           <>
             <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-              {data.results.map((rental) => (
-                <article
-                  key={rental.listing_id}
-                  className="overflow-hidden rounded-xl border border-border bg-card shadow-card"
-                >
-                  <div className="p-5">
-                    <p className="text-xs font-medium uppercase tracking-wide text-primary">
-                      {rental.property_type}
-                    </p>
+              {data.results.map((rental) => {
+                const isSaved =
+                  savedRentals.has(
+                    rental.listing_id,
+                  );
 
-                    <h2 className="mt-2 font-display text-xl font-semibold">
-                      {rental.apartment_name}
-                    </h2>
+                return (
+                  <article
+                    key={rental.listing_id}
+                    className="relative overflow-hidden rounded-xl border border-border bg-card shadow-card"
+                  >
+                    {/* Favorite button */}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleFavorite(
+                          rental.listing_id,
+                        )
+                      }
+                      className="absolute right-4 top-4 z-10 flex size-10 items-center justify-center rounded-full bg-background/90 shadow-sm transition hover:scale-105"
+                      aria-label={
+                        isSaved
+                          ? "Remove rental from saved"
+                          : "Save rental"
+                      }
+                    >
+                      <Heart
+                        className={`size-5 transition ${
+                          isSaved
+                            ? "fill-current text-red-500"
+                            : "text-muted-foreground"
+                        }`}
+                      />
+                    </button>
 
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      {rental.locality}, Chennai
-                    </p>
+                    <div className="p-5">
+                      <p className="text-xs font-medium uppercase tracking-wide text-primary">
+                        {rental.property_type}
+                      </p>
 
-                    <p className="mt-5 font-display text-2xl font-semibold">
-                      {money(rental.price)}
+                      <h2 className="mt-2 pr-12 font-display text-xl font-semibold">
+                        {rental.apartment_name}
+                      </h2>
 
-                      <span className="ml-1 text-sm font-normal text-muted-foreground">
-                        / month
-                      </span>
-                    </p>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        {rental.locality}, Chennai
+                      </p>
 
-                    <div className="mt-5 grid grid-cols-2 gap-3 border-y border-border py-4 text-sm">
-                      <div>
-                        <p className="text-xs text-muted-foreground">
-                          Bedrooms
-                        </p>
+                      <p className="mt-5 font-display text-2xl font-semibold">
+                        {money(rental.price)}
 
-                        <p className="mt-1 font-medium">
-                          {rental.bedroom} BHK
-                        </p>
+                        <span className="ml-1 text-sm font-normal text-muted-foreground">
+                          / month
+                        </span>
+                      </p>
+
+                      <div className="mt-5 grid grid-cols-2 gap-3 border-y border-border py-4 text-sm">
+                        <div>
+                          <p className="text-xs text-muted-foreground">
+                            Bedrooms
+                          </p>
+
+                          <p className="mt-1 font-medium">
+                            {rental.bedroom} BHK
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-xs text-muted-foreground">
+                            Bathrooms
+                          </p>
+
+                          <p className="mt-1 font-medium">
+                            {rental.bathroom ??
+                              "—"}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-xs text-muted-foreground">
+                            Carpet area
+                          </p>
+
+                          <p className="mt-1 font-medium">
+                            {rental.carpet_area !=
+                            null
+                              ? `${rental.carpet_area.toLocaleString(
+                                  "en-IN",
+                                )} sqft`
+                              : "—"}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-xs text-muted-foreground">
+                            Furnishing
+                          </p>
+
+                          <p className="mt-1 font-medium">
+                            {rental.furnishing ??
+                              "—"}
+                          </p>
+                        </div>
                       </div>
 
-                      <div>
-                        <p className="text-xs text-muted-foreground">
-                          Bathrooms
-                        </p>
-
-                        <p className="mt-1 font-medium">
-                          {rental.bathroom ?? "—"}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-xs text-muted-foreground">
-                          Carpet area
-                        </p>
-
-                        <p className="mt-1 font-medium">
-                          {rental.carpet_area != null
-                            ? `${rental.carpet_area.toLocaleString(
-                                "en-IN",
-                              )} sqft`
-                            : "—"}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-xs text-muted-foreground">
-                          Furnishing
-                        </p>
-
-                        <p className="mt-1 font-medium">
-                          {rental.furnishing ?? "—"}
-                        </p>
-                      </div>
+                      <p className="mt-4 text-xs text-muted-foreground">
+                        Posted by{" "}
+                        <span className="font-medium text-foreground">
+                          {rental.posted_by ??
+                            "—"}
+                        </span>
+                      </p>
                     </div>
-
-                    <p className="mt-4 text-xs text-muted-foreground">
-                      Posted by{" "}
-                      <span className="font-medium text-foreground">
-                        {rental.posted_by ?? "—"}
-                      </span>
-                    </p>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
 
             {/* Pagination */}
@@ -378,7 +458,10 @@ function RentalsPage() {
                 disabled={offset === 0}
                 onClick={() =>
                   setOffset(
-                    Math.max(0, offset - 9),
+                    Math.max(
+                      0,
+                      offset - 9,
+                    ),
                   )
                 }
                 className="rounded-md border border-border px-4 py-2 text-sm disabled:opacity-40"
@@ -387,7 +470,9 @@ function RentalsPage() {
               </button>
 
               <span className="text-sm text-muted-foreground">
-                Page {Math.floor(offset / 9) + 1}
+                Page{" "}
+                {Math.floor(offset / 9) +
+                  1}
               </span>
 
               <button

@@ -73,4 +73,11 @@ export const projectsService = {
       has_more: offset + limit < total,
     };
   },
+  getProjectById(projectId: string): Project | null {
+  return (
+    projects.find(
+      (project) => project.project_id === projectId,
+    ) ?? null
+  );
+},
 };

@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, MapPin, Building2 } from "lucide-react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import {
+  Search,
+  MapPin,
+  Building2,
+  Heart,
+} from "lucide-react";
+import {
+  createFileRoute,
+  useNavigate,
+} from "@tanstack/react-router";
 
 import { Header } from "@/components/ivy/Header";
 import { Input } from "@/components/ui/input";
@@ -13,7 +21,16 @@ import {
 
 import type { Project } from "@/types/project";
 import projectsData from "@/data/projects.json";
-import { authService, type AuthSession } from "@/services/auth";
+
+import {
+  authService,
+  type AuthSession,
+} from "@/services/auth";
+
+import {
+  loadSaved,
+  toggleSaved,
+} from "@/services/saved";
 
 const projects = projectsData as Project[];
 
@@ -33,17 +50,42 @@ function formatPrice(value?: number) {
 
 function ProjectCard({
   project,
+  favorite,
+  onFavorite,
 }: {
   project: Project;
+  favorite: boolean;
+  onFavorite: () => void;
 }) {
   return (
-    <article className="overflow-hidden rounded-xl border border-border bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <article className="relative overflow-hidden rounded-xl border border-border bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+      {/* Favorite button */}
+      <button
+        type="button"
+        onClick={onFavorite}
+        className="absolute right-4 top-4 z-20 flex size-10 items-center justify-center rounded-full bg-background/90 shadow-sm backdrop-blur transition hover:scale-105"
+        aria-label={
+          favorite
+            ? "Remove project from saved"
+            : "Save project"
+        }
+      >
+        <Heart
+          className={`size-5 transition ${
+            favorite
+              ? "fill-current text-red-500"
+              : "text-muted-foreground"
+          }`}
+        />
+      </button>
+
+      {/* Project image / placeholder */}
       <div className="flex h-44 items-center justify-center bg-muted">
         <Building2 className="size-12 text-muted-foreground" />
       </div>
 
       <div className="p-5">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-3 pr-12">
           <div>
             <h2 className="font-display text-xl font-semibold text-foreground">
               {project.apartment_name}
@@ -61,6 +103,7 @@ function ProjectCard({
           )}
         </div>
 
+        {/* Location */}
         <div className="mt-4 flex items-center gap-1.5 text-sm text-muted-foreground">
           <MapPin className="size-4" />
 
@@ -69,6 +112,7 @@ function ProjectCard({
           </span>
         </div>
 
+        {/* Price + Area */}
         <div className="mt-5 grid grid-cols-2 gap-4 border-y border-border py-4">
           <div>
             <p className="text-xs text-muted-foreground">
@@ -94,16 +138,20 @@ function ProjectCard({
           </div>
         </div>
 
+        {/* Listings + Units */}
         <div className="mt-4 flex items-center justify-between text-sm">
           <span className="text-muted-foreground">
             {project.total_listings ?? 0} listings
           </span>
 
           <span className="text-muted-foreground">
-            {project.total_units?.toLocaleString() ?? "—"} units
+            {project.total_units?.toLocaleString() ??
+              "—"}{" "}
+            units
           </span>
         </div>
 
+        {/* Amenities */}
         {project.amenities &&
           project.amenities.length > 0 && (
             <div className="mt-4 flex flex-wrap gap-2">
@@ -136,23 +184,36 @@ export default function ProjectsPage() {
   const [filters, setFilters] =
     useState<ProjectFilters>({});
 
-  const [offset, setOffset] = useState(0);
+  const [offset, setOffset] =
+    useState(0);
 
   const [data, setData] =
-    useState<ReturnType<
-      typeof projectsService.getProjects
-    > | null>(null);
+    useState<
+      ReturnType<
+        typeof projectsService.getProjects
+      > | null
+    >(null);
+
+  /*
+   * IDs of projects saved by the current user.
+   */
+  const [savedProjects, setSavedProjects] =
+    useState<Set<string>>(new Set());
 
   const limit = 12;
 
-  // Restore the real logged-in session.
+  /*
+   * Restore the real logged-in session.
+   */
   useEffect(() => {
     let active = true;
 
     authService
       .restoreSession()
       .then((storedSession) => {
-        if (!active) return;
+        if (!active) {
+          return;
+        }
 
         if (!storedSession) {
           navigate({ to: "/" });
@@ -160,6 +221,16 @@ export default function ProjectsPage() {
         }
 
         setSession(storedSession);
+
+        /*
+         * Load saved projects for this user.
+         */
+        setSavedProjects(
+          loadSaved(
+            storedSession,
+            "project",
+          ),
+        );
       })
       .finally(() => {
         if (active) {
@@ -172,6 +243,10 @@ export default function ProjectsPage() {
     };
   }, [navigate]);
 
+  /*
+   * Load projects using the current filters
+   * and pagination offset.
+   */
   useEffect(() => {
     const result =
       projectsService.getProjects(
@@ -183,6 +258,9 @@ export default function ProjectsPage() {
     setData(result);
   }, [filters, offset]);
 
+  /*
+   * Locality filter options.
+   */
   const localities = useMemo(() => {
     return Array.from(
       new Set(
@@ -193,6 +271,9 @@ export default function ProjectsPage() {
     ).sort();
   }, []);
 
+  /*
+   * Project status filter options.
+   */
   const statuses = useMemo(() => {
     return Array.from(
       new Set(
@@ -223,11 +304,37 @@ export default function ProjectsPage() {
     setOffset(0);
   }
 
-  function handleLogout() {
-    authService.signOut();
+  /*
+   * Save / remove project.
+   */
+  function handleFavorite(
+    projectId: string,
+  ) {
+    if (!session) {
+      return;
+    }
+
+    setSavedProjects(
+      toggleSaved(
+        session,
+        "project",
+        projectId,
+      ),
+    );
+  }
+
+  /*
+   * Logout.
+   */
+  async function handleLogout() {
+    await authService.signOut();
+
     navigate({ to: "/" });
   }
 
+  /*
+   * Session loading.
+   */
   if (sessionLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -238,6 +345,9 @@ export default function ProjectsPage() {
     );
   }
 
+  /*
+   * No session.
+   */
   if (!session) {
     return null;
   }
@@ -370,6 +480,14 @@ export default function ProjectsPage() {
                 <ProjectCard
                   key={project.project_id}
                   project={project}
+                  favorite={savedProjects.has(
+                    project.project_id,
+                  )}
+                  onFavorite={() =>
+                    handleFavorite(
+                      project.project_id,
+                    )
+                  }
                 />
               ))}
             </div>
@@ -426,6 +544,7 @@ export default function ProjectsPage() {
     </div>
   );
 }
+
 export const Route = createFileRoute("/projects")({
   component: ProjectsPage,
 });

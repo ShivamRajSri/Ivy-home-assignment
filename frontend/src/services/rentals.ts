@@ -92,4 +92,11 @@ export const rentalsService = {
       has_more: offset + limit < total,
     };
   },
+  getRentalById(listingId: string): Rental | null {
+  return (
+    rentals.find(
+      (rental) => rental.listing_id === listingId,
+    ) ?? null
+  );
+},
 };
