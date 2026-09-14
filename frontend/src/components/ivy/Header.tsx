@@ -20,6 +20,7 @@ export function Header({
     { label: "Rentals", path: "/rentals" },
     { label: "Projects", path: "/projects" },
     { label: "Insights", path: "/insights" },
+    { label: "Saved", path: "/saved" },
   ] as const;
 
   return (
